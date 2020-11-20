@@ -45,18 +45,22 @@ namespace osu.Server.OnlineDbGenerator
         /// Start generating the online.db file.
         /// </summary>
         public void Run() {
+            Console.WriteLine("Starting generator...");
             CreateSchema();
+            Console.WriteLine("Created schema.");
             CopyBeatmaps();
 
             mysql.Clone();
             sqlite.Close();
 
             if(compressSqliteBz2) {
+                Console.WriteLine("Compressing...");
                 using(var inStream = File.OpenRead(sqliteFilePath))
                 using(var outStream = File.OpenWrite(sqliteBz2FilePath))
                 using(var bz2 = new BZip2Stream(outStream, SharpCompress.Compressors.CompressionMode.Compress, false))
                     inStream.CopyTo(bz2);
             }
+            Console.WriteLine("All done!");
         }
 
         /// <summary>
@@ -112,12 +116,16 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         private void CopyBeatmaps() {
             int total = CountBeatmaps(mysql);
+            Console.WriteLine($"Copying {total} beatmaps...");
 
             // Process {step} beatmaps at a time.
             for(int offset = 0; offset < total; offset += step) {
-                var selectBeatmapsReader = SelectBeatmaps(mysql, offset, step);
+                var limit = Math.Min(step, total - offset);
+                var selectBeatmapsReader = SelectBeatmaps(mysql, offset, limit);
                 InsertBeatmaps(sqlite, selectBeatmapsReader);
+                Console.WriteLine($"Copied {offset + limit} out of {total} beatmaps...");
             }
+            Console.WriteLine($"Copied all beatmaps!");
         }
 
         /// <summary>

@@ -225,8 +225,7 @@ namespace osu.Server.OnlineDbGenerator
         private static MySqlConnection GetMySqlConnection()
         {
             string host = (Environment.GetEnvironmentVariable("DB_HOST") ?? "localhost");
-            // string user = (Environment.GetEnvironmentVariable("DB_USER") ?? "root");
-            string user = (Environment.GetEnvironmentVariable("DB_USER") ?? "osuweb");
+            string user = (Environment.GetEnvironmentVariable("DB_USER") ?? "root");
 
             var connection = new MySqlConnection($"Server={host};Database=osu;User ID={user};ConnectionTimeout=5;ConnectionReset=false;Pooling=true;");
             connection.Open();

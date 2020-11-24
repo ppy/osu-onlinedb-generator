@@ -27,7 +27,7 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Path to the output online.db cache file.
         /// </summary>
-        private const string sqliteFilePath = "online.db";
+        private static string sqliteFilePath => Environment.GetEnvironmentVariable("SQLITE_PATH") ?? "sqlite/online.db";
 
         private SqliteConnection sqlite = GetSqliteConnection();
 
@@ -39,7 +39,7 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Path to the bz2-compressed online.db cache file.
         /// </summary>
-        private const string sqliteBz2FilePath = "online.db.bz2";
+        private static string sqliteBz2FilePath => $"{sqliteFilePath}.bz2";
 
         /// <summary>
         /// Start generating the online.db file.

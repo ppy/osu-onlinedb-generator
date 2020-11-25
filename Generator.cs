@@ -117,6 +117,7 @@ namespace osu.Server.OnlineDbGenerator
         private void CopyBeatmaps() {
             int total = CountBeatmaps(mysql);
             Console.WriteLine($"Copying {total} beatmaps...");
+            var start = DateTime.Now;
 
             var selectBeatmapsReader = SelectBeatmaps(mysql);
             // Insert {step} beatmaps at a time.
@@ -125,7 +126,8 @@ namespace osu.Server.OnlineDbGenerator
                 InsertBeatmaps(sqlite, selectBeatmapsReader, limit);
                 Console.WriteLine($"Copied {offset + limit} out of {total} beatmaps...");
             }
-            Console.WriteLine($"Copied all beatmaps!");
+            var timespan = (DateTime.Now - start).TotalMilliseconds;
+            Console.WriteLine($"Copied all beatmaps in {timespan}ms!");
             selectBeatmapsReader.Close();
         }
 

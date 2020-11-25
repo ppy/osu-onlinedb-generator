@@ -263,3 +263,4 @@ Staging/
 
 # Result files
 sqlite/*
+!sqlite/.gitkeep

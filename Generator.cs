@@ -17,7 +17,7 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Amount of beatmaps to fetch and insert in a single operation.
         /// </summary>
-        private const int step = 30;
+        private const int step = 18;
 
         /// <summary>
         /// Online database to fetch beatmaps from.

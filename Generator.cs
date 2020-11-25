@@ -118,14 +118,15 @@ namespace osu.Server.OnlineDbGenerator
             int total = CountBeatmaps(mysql);
             Console.WriteLine($"Copying {total} beatmaps...");
 
-            // Process {step} beatmaps at a time.
+            var selectBeatmapsReader = SelectBeatmaps(mysql);
+            // Insert {step} beatmaps at a time.
             for(int offset = 0; offset < total; offset += step) {
                 var limit = Math.Min(step, total - offset);
-                var selectBeatmapsReader = SelectBeatmaps(mysql, offset, limit);
-                InsertBeatmaps(sqlite, selectBeatmapsReader);
+                InsertBeatmaps(sqlite, selectBeatmapsReader, limit);
                 Console.WriteLine($"Copied {offset + limit} out of {total} beatmaps...");
             }
             Console.WriteLine($"Copied all beatmaps!");
+            selectBeatmapsReader.Close();
         }
 
         /// <summary>
@@ -149,11 +150,11 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         /// <param name="conn">Connection to insert beatmaps into.</param>
         /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
-        private int InsertBeatmaps(SqliteConnection conn, DbDataReader beatmaps) {
+        private int InsertBeatmaps(SqliteConnection conn, DbDataReader beatmaps, int limit) {
             var command = conn.CreateCommand();
             command.CommandText = $"INSERT INTO osu_beatmaps VALUES";
             int i = 0;
-            while(beatmaps.Read()) {
+            while(i < limit && beatmaps.Read()) {
                 if(i > 0)
                     command.CommandText += ", ";
                 command.CommandText += $"(@beatmap_id{i}, @beatmapset_id{i}, @user_id{i}, @filename{i}, @checksum{i}, @version{i}, @total_length{i}, @hit_length{i}, @countTotal{i}, @countNormal{i}, @countSlider{i}, @countSpinner{i}, @diff_drain{i}, @diff_size{i}, @diff_overall{i}, @diff_approach{i}, @playmode{i}, @approved{i}, @last_update{i}, @difficultyrating{i}, @playcount{i}, @passcount{i}, @orphaned{i}, @youtube_preview{i}, @score_version{i}, @deleted_at{i}, @bpm{i})";
@@ -187,7 +188,6 @@ namespace osu.Server.OnlineDbGenerator
                 command.Parameters.AddWithValue($"@bpm{i}", beatmaps.GetDecimal(26));
                 i++;
             }
-            beatmaps.Close();
             return command.ExecuteNonQuery();
         }
 

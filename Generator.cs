@@ -50,7 +50,7 @@ namespace osu.Server.OnlineDbGenerator
             Console.WriteLine("Created schema.");
             CopyBeatmaps();
 
-            mysql.Clone();
+            mysql.Close();
             sqlite.Close();
 
             if(compressSqliteBz2) {

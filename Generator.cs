@@ -12,7 +12,7 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// SQL conditional for a beatmap to be stored in the online.db cache file.
         /// </summary>
-        private const string sqlConditional = "WHERE approved > 0 AND deleted_at IS NULL";
+        private const string sql_conditional = "WHERE approved > 0 AND deleted_at IS NULL";
 
         /// <summary>
         /// Amount of beatmaps to fetch and insert in a single operation.
@@ -22,19 +22,19 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Online database to fetch beatmaps from.
         /// </summary>
-        private MySqlConnection mysql = GetMySqlConnection();
+        private readonly MySqlConnection mysql = getMySqlConnection();
 
         /// <summary>
         /// Path to the output online.db cache file.
         /// </summary>
         private static string sqliteFilePath => Environment.GetEnvironmentVariable("SQLITE_PATH") ?? "sqlite/online.db";
 
-        private SqliteConnection sqlite = GetSqliteConnection();
+        private readonly SqliteConnection sqlite = getSqliteConnection();
 
         /// <summary>
         /// Whether to compress the online.db file to bz2.
         /// </summary>
-        private const bool compressSqliteBz2 = true;
+        private static bool compressSqliteBz2 => true;
 
         /// <summary>
         /// Path to the bz2-compressed online.db cache file.
@@ -44,29 +44,32 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Start generating the online.db file.
         /// </summary>
-        public void Run() {
+        public void Run()
+        {
             Console.WriteLine("Starting generator...");
-            CreateSchema();
+            createSchema();
             Console.WriteLine("Created schema.");
-            CopyBeatmaps();
+            copyBeatmaps();
 
             mysql.Close();
             sqlite.Close();
 
-            if(compressSqliteBz2) {
+            if (compressSqliteBz2)
+            {
                 Console.WriteLine("Compressing...");
-                using(var inStream = File.OpenRead(sqliteFilePath))
-                using(var outStream = File.OpenWrite(sqliteBz2FilePath))
-                using(var bz2 = new BZip2Stream(outStream, SharpCompress.Compressors.CompressionMode.Compress, false))
+                using (var inStream = File.OpenRead(sqliteFilePath))
+                using (var outStream = File.OpenWrite(sqliteBz2FilePath))
+                using (var bz2 = new BZip2Stream(outStream, SharpCompress.Compressors.CompressionMode.Compress, false))
                     inStream.CopyTo(bz2);
             }
+
             Console.WriteLine("All done!");
         }
 
         /// <summary>
         /// Create the schema inside the online.db SQLite database.
         /// </summary>
-        private void CreateSchema()
+        private void createSchema()
         {
             string[] commands = new string[5];
             commands[0] = @"CREATE TABLE `osu_beatmaps` (
@@ -104,7 +107,8 @@ namespace osu.Server.OnlineDbGenerator
             commands[3] = "CREATE INDEX `checksum` ON osu_beatmaps (`checksum`)";
             commands[4] = "CREATE INDEX `user_id` ON osu_beatmaps (`user_id`)";
 
-            foreach(var sql in commands) {
+            foreach (var sql in commands)
+            {
                 var command = sqlite.CreateCommand();
                 command.CommandText = sql;
                 command.ExecuteNonQuery();
@@ -114,18 +118,22 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Copy all beatmaps from online MySQL database to cache SQLite database.
         /// </summary>
-        private void CopyBeatmaps() {
-            int total = CountBeatmaps(mysql);
+        private void copyBeatmaps()
+        {
+            int total = countBeatmaps(mysql);
             Console.WriteLine($"Copying {total} beatmaps...");
             var start = DateTime.Now;
 
-            var selectBeatmapsReader = SelectBeatmaps(mysql);
+            var selectBeatmapsReader = selectBeatmaps(mysql);
+
             // Insert {step} beatmaps at a time.
-            for(int offset = 0; offset < total; offset += step) {
+            for (int offset = 0; offset < total; offset += step)
+            {
                 var limit = Math.Min(step, total - offset);
-                InsertBeatmaps(sqlite, selectBeatmapsReader, limit);
+                insertBeatmaps(sqlite, selectBeatmapsReader, limit);
                 Console.WriteLine($"Copied {offset + limit} out of {total} beatmaps...");
             }
+
             var timespan = (DateTime.Now - start).TotalMilliseconds;
             Console.WriteLine($"Copied all beatmaps in {timespan}ms!");
             selectBeatmapsReader.Close();
@@ -137,12 +145,13 @@ namespace osu.Server.OnlineDbGenerator
         /// <param name="conn">Connection to fetch beatmaps from.</param>
         /// <param name="offset">Offset to fetch beatmaps from.</param>
         /// <param name="limit">Maximum amount of beatmaps we want to fetch.</param>
-        private DbDataReader SelectBeatmaps(DbConnection conn, int offset = -1, int limit = -1) {
+        private DbDataReader selectBeatmaps(DbConnection conn, int offset = -1, int limit = -1)
+        {
             var command = conn.CreateCommand();
-            command.CommandText = $"SELECT * FROM osu_beatmaps {sqlConditional}";
-            if(limit > 0)
+            command.CommandText = $"SELECT * FROM osu_beatmaps {sql_conditional}";
+            if (limit > 0)
                 command.CommandText += $" LIMIT {limit}";
-            if(offset > 0)
+            if (offset > 0)
                 command.CommandText += $" OFFSET {offset}";
             return command.ExecuteReader();
         }
@@ -152,12 +161,16 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         /// <param name="conn">Connection to insert beatmaps into.</param>
         /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
-        private int InsertBeatmaps(SqliteConnection conn, DbDataReader beatmaps, int limit) {
+        /// <param name="limit">Amount of beatmaps to read</param>
+        private int insertBeatmaps(SqliteConnection conn, DbDataReader beatmaps, int limit)
+        {
             var command = conn.CreateCommand();
-            command.CommandText = $"INSERT INTO osu_beatmaps VALUES";
+            command.CommandText = "INSERT INTO osu_beatmaps VALUES";
             int i = 0;
-            while(i < limit && beatmaps.Read()) {
-                if(i > 0)
+
+            while (i < limit && beatmaps.Read())
+            {
+                if (i > 0)
                     command.CommandText += ", ";
                 command.CommandText += $"(@beatmap_id{i}, @beatmapset_id{i}, @user_id{i}, @filename{i}, @checksum{i}, @version{i}, @total_length{i}, @hit_length{i}, @countTotal{i}, @countNormal{i}, @countSlider{i}, @countSpinner{i}, @diff_drain{i}, @diff_size{i}, @diff_overall{i}, @diff_approach{i}, @playmode{i}, @approved{i}, @last_update{i}, @difficultyrating{i}, @playcount{i}, @passcount{i}, @orphaned{i}, @youtube_preview{i}, @score_version{i}, @deleted_at{i}, @bpm{i})";
                 command.Prepare();
@@ -190,6 +203,7 @@ namespace osu.Server.OnlineDbGenerator
                 command.Parameters.AddWithValue($"@bpm{i}", beatmaps.GetDecimal(26));
                 i++;
             }
+
             return command.ExecuteNonQuery();
         }
 
@@ -197,9 +211,10 @@ namespace osu.Server.OnlineDbGenerator
         /// Count beatmaps from MySQL or SQLite database.
         /// </summary>
         /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private int CountBeatmaps(DbConnection conn) {
+        private int countBeatmaps(DbConnection conn)
+        {
             var command = conn.CreateCommand();
-            command.CommandText = $"SELECT COUNT(beatmap_id) FROM osu_beatmaps {sqlConditional}";
+            command.CommandText = $"SELECT COUNT(beatmap_id) FROM osu_beatmaps {sql_conditional}";
             var reader = command.ExecuteReader();
             reader.Read();
             int count = reader.GetInt32(0);
@@ -211,9 +226,9 @@ namespace osu.Server.OnlineDbGenerator
         /// Get a connection to the offline SQLite cache database.
         /// </summary>
         /// <param name="erase">Whether to start fresh.</param>
-        private static SqliteConnection GetSqliteConnection(bool erase = true)
+        private static SqliteConnection getSqliteConnection(bool erase = true)
         {
-            if(erase && File.Exists(sqliteFilePath))
+            if (erase && File.Exists(sqliteFilePath))
                 File.Delete(sqliteFilePath);
 
             var connection = new SqliteConnection($"Data Source={sqliteFilePath}");
@@ -224,7 +239,7 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Get a connection to the online MySQL database.
         /// </summary>
-        private static MySqlConnection GetMySqlConnection()
+        private static MySqlConnection getMySqlConnection()
         {
             string host = (Environment.GetEnvironmentVariable("DB_HOST") ?? "localhost");
             string user = (Environment.GetEnvironmentVariable("DB_USER") ?? "root");

@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.0.78" />
     <PackageReference Include="Microsoft.Data.SQLite" Version="5.0.0" />
     <PackageReference Include="MySqlConnector" Version="1.1.0" />
     <PackageReference Include="sharpcompress" Version="0.26.0" />

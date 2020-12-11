@@ -99,19 +99,20 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Copy all beatmaps from online MySQL database to cache SQLite database.
         /// </summary>
-        private void copyBeatmaps(MySqlConnection mysql, SqliteConnection sqlite)
+        private void copyBeatmaps(IDbConnection source, IDbConnection destination)
         {
-            int total = getBeatmapCount(mysql);
+            int total = getBeatmapCount(source);
             Console.WriteLine($"Copying {total} beatmaps...");
 
             var start = DateTime.Now;
 
-            var mysqlReader = mysql.ExecuteReader("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL LIMIT 2000");
+            var beatmapsReader = source.ExecuteReader("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL LIMIT 2000");
 
-            insertBeatmaps(sqlite, mysqlReader);
+            insertBeatmaps(destination, beatmapsReader);
 
             var timespan = (DateTime.Now - start).TotalMilliseconds;
-            int totalSqlite = getBeatmapCount(sqlite);
+
+            int totalSqlite = getBeatmapCount(destination);
 
             Console.WriteLine($"Copied beatmaps in {timespan}ms! (mysql:{total} sqlite:{totalSqlite})");
         }
@@ -121,7 +122,7 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         /// <param name="conn">Connection to insert beatmaps into.</param>
         /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
-        private void insertBeatmaps(SqliteConnection conn, IDataReader beatmaps)
+        private void insertBeatmaps(IDbConnection conn, IDataReader beatmaps)
         {
             const string sql = "INSERT INTO osu_beatmaps VALUES(@beatmap_id, @beatmapset_id, @user_id, @filename, @checksum, @version, @total_length, @hit_length, @countTotal, @countNormal, @countSlider, @countSpinner, @diff_drain, @diff_size, @diff_overall, @diff_approach, @playmode, @approved, @last_update, @difficultyrating, @playcount, @passcount, @orphaned, @youtube_preview, @score_version, @deleted_at, @bpm)";
 

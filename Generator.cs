@@ -137,7 +137,7 @@ namespace osu.Server.OnlineDbGenerator
         {
             const string sql = "INSERT INTO osu_beatmaps VALUES(@beatmap_id, @beatmapset_id, @user_id, @filename, @checksum, @version, @total_length, @hit_length, @countTotal, @countNormal, @countSlider, @countSpinner, @diff_drain, @diff_size, @diff_overall, @diff_approach, @playmode, @approved, @last_update, @difficultyrating, @playcount, @passcount, @orphaned, @youtube_preview, @score_version, @deleted_at, @bpm)";
 
-            int i = 0;
+            int processedItems = 0;
 
             while (beatmaps.Read())
             {
@@ -171,9 +171,9 @@ namespace osu.Server.OnlineDbGenerator
                     deleted_at = beatmaps.IsDBNull(25) ? (object)DBNull.Value : beatmaps.GetDateTime(25).ToString("yyyy-MM-dd HH:mm:ss"),
                     bpm = beatmaps.GetDecimal(26)
                 });
-                i++;
-                if (i % 50 == 0)
-                    Console.WriteLine($"Copied {i} beatmaps...");
+
+                if (++processedItems % 50 == 0)
+                    Console.WriteLine($"Copied {processedItems} beatmaps...");
             }
 
             beatmaps.Close();

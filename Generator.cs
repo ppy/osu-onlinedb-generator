@@ -1,10 +1,12 @@
-using Microsoft.Data.Sqlite;
-using MySqlConnector;
-using SharpCompress.Compressors.BZip2;
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using Dapper;
+using Microsoft.Data.Sqlite;
+using MySqlConnector;
+using SharpCompress.Compressors;
+using SharpCompress.Compressors.BZip2;
 
 namespace osu.Server.OnlineDbGenerator
 {
@@ -46,7 +48,7 @@ namespace osu.Server.OnlineDbGenerator
 
                     using (var inStream = File.OpenRead(sqliteFilePath))
                     using (var outStream = File.OpenWrite(sqliteBz2FilePath))
-                    using (var bz2 = new BZip2Stream(outStream, SharpCompress.Compressors.CompressionMode.Compress, false))
+                    using (var bz2 = new BZip2Stream(outStream, CompressionMode.Compress, false))
                         inStream.CopyTo(bz2);
                 }
             }
@@ -106,7 +108,7 @@ namespace osu.Server.OnlineDbGenerator
 
             var start = DateTime.Now;
 
-            var beatmapsReader = source.ExecuteReader("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL");
+            var beatmapsReader = source.Query<BeatmapRow>("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL");
 
             insertBeatmaps(destination, beatmapsReader);
 
@@ -122,50 +124,19 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         /// <param name="conn">Connection to insert beatmaps into.</param>
         /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
-        private void insertBeatmaps(IDbConnection conn, IDataReader beatmaps)
+        private void insertBeatmaps(IDbConnection conn, IEnumerable<BeatmapRow> beatmaps)
         {
             const string sql = "INSERT INTO osu_beatmaps VALUES(@beatmap_id, @beatmapset_id, @user_id, @filename, @checksum, @version, @total_length, @hit_length, @countTotal, @countNormal, @countSlider, @countSpinner, @diff_drain, @diff_size, @diff_overall, @diff_approach, @playmode, @approved, @last_update, @difficultyrating, @playcount, @passcount, @orphaned, @youtube_preview, @score_version, @deleted_at, @bpm)";
 
             int processedItems = 0;
 
-            while (beatmaps.Read())
+            foreach (var beatmap in beatmaps)
             {
-                conn.Execute(sql, new
-                {
-                    beatmap_id = beatmaps.GetInt32(0),
-                    beatmapset_id = beatmaps.GetInt32(1),
-                    user_id = beatmaps.GetInt32(2),
-                    filename = beatmaps.GetString(3),
-                    checksum = beatmaps.GetString(4),
-                    version = beatmaps.GetString(5),
-                    total_length = beatmaps.GetInt32(6),
-                    hit_length = beatmaps.GetInt32(7),
-                    countTotal = beatmaps.GetInt32(8),
-                    countNormal = beatmaps.GetInt32(9),
-                    countSlider = beatmaps.GetInt32(10),
-                    countSpinner = beatmaps.GetInt32(11),
-                    diff_drain = beatmaps.GetDecimal(12),
-                    diff_size = beatmaps.GetDecimal(13),
-                    diff_overall = beatmaps.GetDecimal(14),
-                    diff_approach = beatmaps.GetDecimal(15),
-                    playmode = beatmaps.GetInt32(16),
-                    approved = beatmaps.GetInt32(17),
-                    last_update = beatmaps.IsDBNull(18) ? (object)DBNull.Value : beatmaps.GetDateTime(18).ToString("yyyy-MM-dd HH:mm:ss"),
-                    difficultyrating = beatmaps.GetDecimal(19),
-                    playcount = beatmaps.GetInt32(20),
-                    passcount = beatmaps.GetInt32(21),
-                    orphaned = beatmaps.GetInt32(22),
-                    youtube_preview = beatmaps.IsDBNull(23) ? (object)DBNull.Value : beatmaps.GetString(23),
-                    score_version = beatmaps.GetInt32(24),
-                    deleted_at = beatmaps.IsDBNull(25) ? (object)DBNull.Value : beatmaps.GetDateTime(25).ToString("yyyy-MM-dd HH:mm:ss"),
-                    bpm = beatmaps.GetDecimal(26)
-                });
+                conn.Execute(sql, beatmap);
 
                 if (++processedItems % 50 == 0)
                     Console.WriteLine($"Copied {processedItems} beatmaps...");
             }
-
-            beatmaps.Close();
         }
 
         /// <summary>
@@ -182,6 +153,8 @@ namespace osu.Server.OnlineDbGenerator
         {
             if (erase && File.Exists(sqliteFilePath))
                 File.Delete(sqliteFilePath);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(sqliteFilePath));
 
             var connection = new SqliteConnection($"Data Source={sqliteFilePath}");
             connection.Open();

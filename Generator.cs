@@ -11,14 +11,9 @@ namespace osu.Server.OnlineDbGenerator
     public class Generator
     {
         /// <summary>
-        /// SQL conditional for a beatmap to be stored in the online.db cache file.
-        /// </summary>
-        private const string sql_conditional = "WHERE approved > 0 AND deleted_at IS NULL";
-
-        /// <summary>
         /// Online database to fetch beatmaps from.
         /// </summary>
-        private readonly MySqlConnection mysql = getMySqlConnection();
+        private readonly MySqlConnection conn = getMySqlConnection();
 
         /// <summary>
         /// Path to the output online.db cache file.
@@ -47,7 +42,7 @@ namespace osu.Server.OnlineDbGenerator
             Console.WriteLine("Created schema.");
             copyBeatmaps();
 
-            mysql.Close();
+            conn.Close();
             sqlite.Close();
 
             if (compressSqliteBz2)
@@ -108,24 +103,15 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         private void copyBeatmaps()
         {
-            int total = countBeatmaps(mysql);
+            int total = countBeatmaps(conn);
             Console.WriteLine($"Copying {total} beatmaps...");
             var start = DateTime.Now;
 
-            var selectBeatmapsReader = selectBeatmaps(mysql);
-            insertBeatmaps(sqlite, selectBeatmapsReader);
+            var mysqlBeatmaps = conn.ExecuteReader("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL LIMIT 2000");
+            insertBeatmaps(sqlite, mysqlBeatmaps);
 
             var timespan = (DateTime.Now - start).TotalMilliseconds;
             Console.WriteLine($"Copied all beatmaps in {timespan}ms!");
-        }
-
-        /// <summary>
-        /// Fetch beatmaps from MySQL or SQLite database, with offset and limit options.
-        /// </summary>
-        /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private IDataReader selectBeatmaps(IDbConnection conn)
-        {
-            return conn.ExecuteReader($"SELECT * FROM osu_beatmaps2 {sql_conditional} LIMIT 2000");
         }
 
         /// <summary>
@@ -185,7 +171,7 @@ namespace osu.Server.OnlineDbGenerator
         /// <param name="conn">Connection to fetch beatmaps from.</param>
         private int countBeatmaps(IDbConnection conn)
         {
-            return conn.QuerySingle<int>($"SELECT COUNT(beatmap_id) FROM osu_beatmaps2 {sql_conditional}");
+            return conn.QuerySingle<int>($"SELECT COUNT(beatmap_id) FROM osu_beatmaps2 {"WHERE approved > 0 AND deleted_at IS NULL"}");
         }
 
         /// <summary>

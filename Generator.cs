@@ -106,7 +106,7 @@ namespace osu.Server.OnlineDbGenerator
 
             var start = DateTime.Now;
 
-            var beatmapsReader = source.ExecuteReader("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL LIMIT 2000");
+            var beatmapsReader = source.ExecuteReader("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL");
 
             insertBeatmaps(destination, beatmapsReader);
 
@@ -172,10 +172,7 @@ namespace osu.Server.OnlineDbGenerator
         /// Count beatmaps from MySQL or SQLite database.
         /// </summary>
         /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private int getBeatmapCount(IDbConnection conn)
-        {
-            return conn.QuerySingle<int>($"SELECT COUNT(beatmap_id) FROM osu_beatmaps2 {"WHERE approved > 0 AND deleted_at IS NULL"}");
-        }
+        private int getBeatmapCount(IDbConnection conn) => conn.QuerySingle<int>("SELECT COUNT(beatmap_id) FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL");
 
         /// <summary>
         /// Get a connection to the offline SQLite cache database.

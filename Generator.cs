@@ -2,6 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using System.Linq;
+using Amazon;
+using Amazon.Runtime;
+using Amazon.S3;
+using Amazon.S3.Model;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using MySqlConnector;
@@ -16,11 +21,6 @@ namespace osu.Server.OnlineDbGenerator
         /// Path to the output online.db cache file.
         /// </summary>
         private static string sqliteFilePath => Environment.GetEnvironmentVariable("SQLITE_PATH") ?? "sqlite/online.db";
-
-        /// <summary>
-        /// Whether to compress the online.db file to bz2.
-        /// </summary>
-        private static bool compressSqliteBz2 => true;
 
         /// <summary>
         /// Path to the bz2-compressed online.db cache file.
@@ -42,14 +42,19 @@ namespace osu.Server.OnlineDbGenerator
                 Console.WriteLine("Created schema.");
                 copyBeatmaps(mysql, sqlite);
 
-                if (compressSqliteBz2)
-                {
-                    Console.WriteLine("Compressing...");
+                Console.WriteLine("Compressing...");
 
-                    using (var inStream = File.OpenRead(sqliteFilePath))
-                    using (var outStream = File.OpenWrite(sqliteBz2FilePath))
-                    using (var bz2 = new BZip2Stream(outStream, CompressionMode.Compress, false))
-                        inStream.CopyTo(bz2);
+                using (var inStream = File.OpenRead(sqliteFilePath))
+                using (var outStream = File.OpenWrite(sqliteBz2FilePath))
+                using (var bz2 = new BZip2Stream(outStream, CompressionMode.Compress, false))
+                    inStream.CopyTo(bz2);
+
+                if (Environment.GetEnvironmentVariable("S3_KEY") != null)
+                {
+                    Console.WriteLine("Uploading to S3...");
+
+                    using (var stream = File.OpenRead(sqliteBz2FilePath))
+                        Upload("assets.ppy.sh", "client-resources/online.db.bz2", stream, stream.Length, "application/x-bzip2");
                 }
             }
 
@@ -172,6 +177,40 @@ namespace osu.Server.OnlineDbGenerator
             var connection = new MySqlConnection($"Server={host};Database=osu;User ID={user};ConnectionTimeout=5;ConnectionReset=false;Pooling=true;");
             connection.Open();
             return connection;
+        }
+
+        private static AmazonS3Client getClient(RegionEndpoint endpoint = null)
+        {
+            string key = Environment.GetEnvironmentVariable("S3_KEY");
+            string secret = Environment.GetEnvironmentVariable("S3_SECRET");
+
+            return new AmazonS3Client(new BasicAWSCredentials(key, secret), new AmazonS3Config
+            {
+                CacheHttpClient = true,
+                HttpClientCacheSize = 32,
+                RegionEndpoint = endpoint ?? RegionEndpoint.USWest1,
+                UseHttp = true,
+                ForcePathStyle = true
+            });
+        }
+
+        public static void Upload(string bucket, string key, Stream stream, long contentLength, string contentType = null)
+        {
+            using (var client = getClient())
+            {
+                client.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = bucket,
+                    Key = key,
+                    CannedACL = S3CannedACL.PublicRead,
+                    Headers =
+                    {
+                        ContentLength = contentLength,
+                        ContentType = contentType,
+                    },
+                    InputStream = stream
+                }).Wait();
+            }
         }
     }
 }

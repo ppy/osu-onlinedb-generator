@@ -11,16 +11,9 @@ namespace osu.Server.OnlineDbGenerator
     public class Generator
     {
         /// <summary>
-        /// Online database to fetch beatmaps from.
-        /// </summary>
-        private readonly MySqlConnection conn = getMySqlConnection();
-
-        /// <summary>
         /// Path to the output online.db cache file.
         /// </summary>
         private static string sqliteFilePath => Environment.GetEnvironmentVariable("SQLITE_PATH") ?? "sqlite/online.db";
-
-        private readonly SqliteConnection sqlite = getSqliteConnection();
 
         /// <summary>
         /// Whether to compress the online.db file to bz2.
@@ -37,21 +30,22 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         public void Run()
         {
-            Console.WriteLine("Starting generator...");
-            createSchema();
-            Console.WriteLine("Created schema.");
-            copyBeatmaps();
-
-            conn.Close();
-            sqlite.Close();
-
-            if (compressSqliteBz2)
+            using (var sqlite = getSqliteConnection())
+            using (var mysql = getMySqlConnection())
             {
-                Console.WriteLine("Compressing...");
-                using (var inStream = File.OpenRead(sqliteFilePath))
-                using (var outStream = File.OpenWrite(sqliteBz2FilePath))
-                using (var bz2 = new BZip2Stream(outStream, SharpCompress.Compressors.CompressionMode.Compress, false))
-                    inStream.CopyTo(bz2);
+                Console.WriteLine("Starting generator...");
+                createSchema(sqlite);
+                Console.WriteLine("Created schema.");
+                copyBeatmaps(mysql, sqlite);
+
+                if (compressSqliteBz2)
+                {
+                    Console.WriteLine("Compressing...");
+                    using (var inStream = File.OpenRead(sqliteFilePath))
+                    using (var outStream = File.OpenWrite(sqliteBz2FilePath))
+                    using (var bz2 = new BZip2Stream(outStream, SharpCompress.Compressors.CompressionMode.Compress, false))
+                        inStream.CopyTo(bz2);
+                }
             }
 
             Console.WriteLine("All done!");
@@ -60,7 +54,8 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Create the schema inside the online.db SQLite database.
         /// </summary>
-        private void createSchema()
+        /// <param name="sqlite"></param>
+        private void createSchema(SqliteConnection sqlite)
         {
             sqlite.Execute(@"CREATE TABLE `osu_beatmaps` (
                                   `beatmap_id` mediumint unsigned NOT NULL,
@@ -101,14 +96,16 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Copy all beatmaps from online MySQL database to cache SQLite database.
         /// </summary>
-        private void copyBeatmaps()
+        private void copyBeatmaps(MySqlConnection mysql, SqliteConnection sqlite)
         {
-            int total = countBeatmaps(conn);
+            int total = countBeatmaps(mysql);
             Console.WriteLine($"Copying {total} beatmaps...");
+
             var start = DateTime.Now;
 
-            var mysqlBeatmaps = conn.ExecuteReader("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL LIMIT 2000");
-            insertBeatmaps(sqlite, mysqlBeatmaps);
+            var mysqlReader = mysql.ExecuteReader("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL LIMIT 2000");
+
+            insertBeatmaps(sqlite, mysqlReader);
 
             var timespan = (DateTime.Now - start).TotalMilliseconds;
             Console.WriteLine($"Copied all beatmaps in {timespan}ms!");

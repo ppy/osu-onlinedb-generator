@@ -34,13 +34,16 @@ namespace osu.Server.OnlineDbGenerator
             using (var mysql = getMySqlConnection())
             {
                 Console.WriteLine("Starting generator...");
+
                 createSchema(sqlite);
+
                 Console.WriteLine("Created schema.");
                 copyBeatmaps(mysql, sqlite);
 
                 if (compressSqliteBz2)
                 {
                     Console.WriteLine("Compressing...");
+
                     using (var inStream = File.OpenRead(sqliteFilePath))
                     using (var outStream = File.OpenWrite(sqliteBz2FilePath))
                     using (var bz2 = new BZip2Stream(outStream, SharpCompress.Compressors.CompressionMode.Compress, false))
@@ -98,7 +101,7 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         private void copyBeatmaps(MySqlConnection mysql, SqliteConnection sqlite)
         {
-            int total = countBeatmaps(mysql);
+            int total = getBeatmapCount(mysql);
             Console.WriteLine($"Copying {total} beatmaps...");
 
             var start = DateTime.Now;
@@ -108,7 +111,9 @@ namespace osu.Server.OnlineDbGenerator
             insertBeatmaps(sqlite, mysqlReader);
 
             var timespan = (DateTime.Now - start).TotalMilliseconds;
-            Console.WriteLine($"Copied all beatmaps in {timespan}ms!");
+            int totalSqlite = getBeatmapCount(sqlite);
+
+            Console.WriteLine($"Copied beatmaps in {timespan}ms! (mysql:{total} sqlite:{totalSqlite})");
         }
 
         /// <summary>
@@ -166,7 +171,7 @@ namespace osu.Server.OnlineDbGenerator
         /// Count beatmaps from MySQL or SQLite database.
         /// </summary>
         /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private int countBeatmaps(IDbConnection conn)
+        private int getBeatmapCount(IDbConnection conn)
         {
             return conn.QuerySingle<int>($"SELECT COUNT(beatmap_id) FROM osu_beatmaps2 {"WHERE approved > 0 AND deleted_at IS NULL"}");
         }

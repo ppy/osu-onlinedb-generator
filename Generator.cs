@@ -38,8 +38,9 @@ namespace osu.Server.OnlineDbGenerator
                 Console.WriteLine("Starting generator...");
 
                 createSchema(sqlite);
-
                 Console.WriteLine("Created schema.");
+
+                copyBeatmapSets(mysql, sqlite);
                 copyBeatmaps(mysql, sqlite);
 
                 Console.WriteLine("Compressing...");
@@ -67,6 +68,13 @@ namespace osu.Server.OnlineDbGenerator
         /// <param name="sqlite"></param>
         private void createSchema(SqliteConnection sqlite)
         {
+            sqlite.Execute(@"CREATE TABLE `osu_beatmapsets` (
+                                  `beatmapset_id` mediumint unsigned NOT NULL,
+                                  `date_submitted` tinyint NOT NULL DEFAULT '0',
+                                  `date_approved` timestamp NULL DEFAULT NULL,
+                                  `approved` timestamp NULL DEFAULT NULL,
+                                  PRIMARY KEY (`beatmapset_id`))");
+
             sqlite.Execute(@"CREATE TABLE `osu_beatmaps` (
                                   `beatmap_id` mediumint unsigned NOT NULL,
                                   `beatmapset_id` mediumint unsigned DEFAULT NULL,
@@ -81,6 +89,27 @@ namespace osu.Server.OnlineDbGenerator
             sqlite.Execute("CREATE INDEX `filename` ON osu_beatmaps (`filename`)");
             sqlite.Execute("CREATE INDEX `checksum` ON osu_beatmaps (`checksum`)");
             sqlite.Execute("CREATE INDEX `user_id` ON osu_beatmaps (`user_id`)");
+        }
+
+        /// <summary>
+        /// Copy all beatmaps from online MySQL database to cache SQLite database.
+        /// </summary>
+        private void copyBeatmapSets(IDbConnection source, IDbConnection destination)
+        {
+            int total = getBeatmapSetCount(source);
+            Console.WriteLine($"Copying {total} beatmap sets...");
+
+            var start = DateTime.Now;
+
+            var beatmapSetsReader = source.Query<BeatmapSetRow>("SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE approved > 0");
+
+            insertBeatmapSets(destination, beatmapSetsReader);
+
+            var timespan = (DateTime.Now - start).TotalMilliseconds;
+
+            int totalSqlite = getBeatmapSetCount(destination);
+
+            Console.WriteLine($"Copied beatmap sets in {timespan}ms! (mysql:{total} sqlite:{totalSqlite})");
         }
 
         /// <summary>
@@ -105,6 +134,26 @@ namespace osu.Server.OnlineDbGenerator
         }
 
         /// <summary>
+        /// Insert beatmap sets into the SQLite database.
+        /// </summary>
+        /// <param name="conn">Connection to insert beatmaps into.</param>
+        /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
+        private void insertBeatmapSets(IDbConnection conn, IEnumerable<BeatmapSetRow> beatmapsets)
+        {
+            const string sql = "INSERT INTO osu_beatmapsets VALUES(@beatmapset_id, @submit_date, @approved_date, @approved)";
+
+            int processedItems = 0;
+
+            foreach (var beatmapset in beatmapsets)
+            {
+                conn.Execute(sql, beatmapset);
+
+                if (++processedItems % 50 == 0)
+                    Console.WriteLine($"Copied {processedItems} beatmap sets...");
+            }
+        }
+
+        /// <summary>
         /// Insert beatmaps into the SQLite database.
         /// </summary>
         /// <param name="conn">Connection to insert beatmaps into.</param>
@@ -123,6 +172,12 @@ namespace osu.Server.OnlineDbGenerator
                     Console.WriteLine($"Copied {processedItems} beatmaps...");
             }
         }
+
+        /// <summary>
+        /// Count beatmap sets from MySQL or SQLite database.
+        /// </summary>
+        /// <param name="conn">Connection to fetch beatmaps from.</param>
+        private int getBeatmapSetCount(IDbConnection conn) => conn.QuerySingle<int>("SELECT COUNT(beatmapset_id) FROM osu_beatmapsets WHERE approved > 0");
 
         /// <summary>
         /// Count beatmaps from MySQL or SQLite database.

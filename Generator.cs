@@ -70,7 +70,7 @@ namespace osu.Server.OnlineDbGenerator
         {
             sqlite.Execute(@"CREATE TABLE `osu_beatmapsets` (
                                   `beatmapset_id` mediumint unsigned NOT NULL,
-                                  `date_submitted` tinyint NOT NULL DEFAULT '0',
+                                  `date_submitted` timestamp NOT NULL DEFAULT NULL,
                                   `date_approved` timestamp NULL DEFAULT NULL,
                                   `approved` timestamp NULL DEFAULT NULL,
                                   PRIMARY KEY (`beatmapset_id`))");

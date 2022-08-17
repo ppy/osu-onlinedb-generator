@@ -110,6 +110,11 @@ namespace osu.Server.OnlineDbGenerator
             int totalSqlite = getBeatmapSetCount(destination);
 
             Console.WriteLine($"Copied beatmap sets in {timespan}ms! (mysql:{total} sqlite:{totalSqlite})");
+
+            if (totalSqlite != total)
+            {
+                throw new Exception($"Expected {total} beatmap sets, but found {totalSqlite} in sqlite! Aborting");
+            }
         }
 
         /// <summary>
@@ -131,6 +136,11 @@ namespace osu.Server.OnlineDbGenerator
             int totalSqlite = getBeatmapCount(destination);
 
             Console.WriteLine($"Copied beatmaps in {timespan}ms! (mysql:{total} sqlite:{totalSqlite})");
+
+            if (totalSqlite != total)
+            {
+                throw new Exception($"Expected {total} beatmaps, but found {totalSqlite} in sqlite! Aborting");
+            }
         }
 
         /// <summary>

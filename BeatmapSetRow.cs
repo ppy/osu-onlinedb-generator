@@ -7,14 +7,11 @@ using System;
 
 namespace osu.Server.OnlineDbGenerator
 {
-    public class BeatmapRow
+    public class BeatmapSetRow
     {
-        public int beatmap_id { get; set; }
         public int beatmapset_id { get; set; }
-        public int user_id { get; set; }
-        public string filename { get; set; }
-        public string checksum { get; set; }
         public int approved { get; set; }
-        public DateTimeOffset last_update { get; set; }
+        public DateTimeOffset approved_date { get; set; }
+        public DateTimeOffset submit_date { get; set; }
     }
 }

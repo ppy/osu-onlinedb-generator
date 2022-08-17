@@ -38,8 +38,9 @@ namespace osu.Server.OnlineDbGenerator
                 Console.WriteLine("Starting generator...");
 
                 createSchema(sqlite);
-
                 Console.WriteLine("Created schema.");
+
+                copyBeatmapSets(mysql, sqlite);
                 copyBeatmaps(mysql, sqlite);
 
                 Console.WriteLine("Compressing...");
@@ -67,40 +68,48 @@ namespace osu.Server.OnlineDbGenerator
         /// <param name="sqlite"></param>
         private void createSchema(SqliteConnection sqlite)
         {
+            sqlite.Execute(@"CREATE TABLE `osu_beatmapsets` (
+                                  `beatmapset_id` mediumint unsigned NOT NULL,
+                                  `submit_date` timestamp NOT NULL DEFAULT NULL,
+                                  `approved_date` timestamp NULL DEFAULT NULL,
+                                  `approved` timestamp NULL DEFAULT NULL,
+                                  PRIMARY KEY (`beatmapset_id`))");
+
             sqlite.Execute(@"CREATE TABLE `osu_beatmaps` (
                                   `beatmap_id` mediumint unsigned NOT NULL,
                                   `beatmapset_id` mediumint unsigned DEFAULT NULL,
                                   `user_id` int unsigned NOT NULL DEFAULT '0',
                                   `filename` varchar(150) DEFAULT NULL,
                                   `checksum` varchar(32) DEFAULT NULL,
-                                  `version` varchar(80) NOT NULL DEFAULT '',
-                                  `total_length` mediumint unsigned NOT NULL DEFAULT '0',
-                                  `hit_length` mediumint unsigned NOT NULL DEFAULT '0',
-                                  `countTotal` smallint unsigned NOT NULL DEFAULT '0',
-                                  `countNormal` smallint unsigned NOT NULL DEFAULT '0',
-                                  `countSlider` smallint unsigned NOT NULL DEFAULT '0',
-                                  `countSpinner` smallint unsigned NOT NULL DEFAULT '0',
-                                  `diff_drain` float unsigned NOT NULL DEFAULT '0',
-                                  `diff_size` float unsigned NOT NULL DEFAULT '0',
-                                  `diff_overall` float unsigned NOT NULL DEFAULT '0',
-                                  `diff_approach` float unsigned NOT NULL DEFAULT '0',
-                                  `playmode` tinyint unsigned NOT NULL DEFAULT '0',
                                   `approved` tinyint NOT NULL DEFAULT '0',
                                   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                  `difficultyrating` float NOT NULL DEFAULT '0',
-                                  `playcount` int unsigned NOT NULL DEFAULT '0',
-                                  `passcount` int unsigned NOT NULL DEFAULT '0',
-                                  `orphaned` tinyint(1) NOT NULL DEFAULT '0',
-                                  `youtube_preview` varchar(50) DEFAULT NULL,
-                                  `score_version` tinyint NOT NULL DEFAULT '1',
-                                  `deleted_at` timestamp NULL DEFAULT NULL,
-                                  `bpm` float DEFAULT NULL,
                                   PRIMARY KEY (`beatmap_id`))");
 
             sqlite.Execute("CREATE INDEX `beatmapset_id` ON osu_beatmaps (`beatmapset_id`)");
             sqlite.Execute("CREATE INDEX `filename` ON osu_beatmaps (`filename`)");
             sqlite.Execute("CREATE INDEX `checksum` ON osu_beatmaps (`checksum`)");
             sqlite.Execute("CREATE INDEX `user_id` ON osu_beatmaps (`user_id`)");
+        }
+
+        /// <summary>
+        /// Copy all beatmaps from online MySQL database to cache SQLite database.
+        /// </summary>
+        private void copyBeatmapSets(IDbConnection source, IDbConnection destination)
+        {
+            int total = getBeatmapSetCount(source);
+            Console.WriteLine($"Copying {total} beatmap sets...");
+
+            var start = DateTime.Now;
+
+            var beatmapSetsReader = source.Query<BeatmapSetRow>("SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE approved > 0");
+
+            insertBeatmapSets(destination, beatmapSetsReader);
+
+            var timespan = (DateTime.Now - start).TotalMilliseconds;
+
+            int totalSqlite = getBeatmapSetCount(destination);
+
+            Console.WriteLine($"Copied beatmap sets in {timespan}ms! (mysql:{total} sqlite:{totalSqlite})");
         }
 
         /// <summary>
@@ -113,7 +122,7 @@ namespace osu.Server.OnlineDbGenerator
 
             var start = DateTime.Now;
 
-            var beatmapsReader = source.Query<BeatmapRow>("SELECT * FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL");
+            var beatmapsReader = source.Query<BeatmapRow>("SELECT beatmap_id, beatmapset_id, user_id, filename, checksum, approved, last_update FROM osu_beatmaps WHERE approved > 0");
 
             insertBeatmaps(destination, beatmapsReader);
 
@@ -125,13 +134,33 @@ namespace osu.Server.OnlineDbGenerator
         }
 
         /// <summary>
+        /// Insert beatmap sets into the SQLite database.
+        /// </summary>
+        /// <param name="conn">Connection to insert beatmaps into.</param>
+        /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
+        private void insertBeatmapSets(IDbConnection conn, IEnumerable<BeatmapSetRow> beatmapsets)
+        {
+            const string sql = "INSERT INTO osu_beatmapsets VALUES(@beatmapset_id, @submit_date, @approved_date, @approved)";
+
+            int processedItems = 0;
+
+            foreach (var beatmapset in beatmapsets)
+            {
+                conn.Execute(sql, beatmapset);
+
+                if (++processedItems % 50 == 0)
+                    Console.WriteLine($"Copied {processedItems} beatmap sets...");
+            }
+        }
+
+        /// <summary>
         /// Insert beatmaps into the SQLite database.
         /// </summary>
         /// <param name="conn">Connection to insert beatmaps into.</param>
         /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
         private void insertBeatmaps(IDbConnection conn, IEnumerable<BeatmapRow> beatmaps)
         {
-            const string sql = "INSERT INTO osu_beatmaps VALUES(@beatmap_id, @beatmapset_id, @user_id, @filename, @checksum, @version, @total_length, @hit_length, @countTotal, @countNormal, @countSlider, @countSpinner, @diff_drain, @diff_size, @diff_overall, @diff_approach, @playmode, @approved, @last_update, @difficultyrating, @playcount, @passcount, @orphaned, @youtube_preview, @score_version, @deleted_at, @bpm)";
+            const string sql = "INSERT INTO osu_beatmaps VALUES(@beatmap_id, @beatmapset_id, @user_id, @filename, @checksum, @approved, @last_update)";
 
             int processedItems = 0;
 
@@ -145,10 +174,16 @@ namespace osu.Server.OnlineDbGenerator
         }
 
         /// <summary>
+        /// Count beatmap sets from MySQL or SQLite database.
+        /// </summary>
+        /// <param name="conn">Connection to fetch beatmaps from.</param>
+        private int getBeatmapSetCount(IDbConnection conn) => conn.QuerySingle<int>("SELECT COUNT(beatmapset_id) FROM osu_beatmapsets WHERE approved > 0");
+
+        /// <summary>
         /// Count beatmaps from MySQL or SQLite database.
         /// </summary>
         /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private int getBeatmapCount(IDbConnection conn) => conn.QuerySingle<int>("SELECT COUNT(beatmap_id) FROM osu_beatmaps WHERE approved > 0 AND deleted_at IS NULL");
+        private int getBeatmapCount(IDbConnection conn) => conn.QuerySingle<int>("SELECT COUNT(beatmap_id) FROM osu_beatmaps WHERE approved > 0");
 
         /// <summary>
         /// Get a connection to the offline SQLite cache database.

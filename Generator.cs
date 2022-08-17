@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -56,6 +57,12 @@ namespace osu.Server.OnlineDbGenerator
 
                     using (var stream = File.OpenRead(sqliteBz2FilePath))
                         Upload("assets.ppy.sh", "client-resources/online.db.bz2", stream, stream.Length, "application/x-bzip2");
+
+                    if (Environment.GetEnvironmentVariable("S3_PROXY_CACHE_PURGE_KEY") != null)
+                    {
+                        Console.WriteLine("Purging s3-nginx-proxy cache...");
+                        PurgeCache("https://assets.ppy.sh/client-resources/online.db.bz2", Environment.GetEnvironmentVariable("S3_PROXY_CACHE_PURGE_KEY"));
+                    }
                 }
             }
 
@@ -246,6 +253,16 @@ namespace osu.Server.OnlineDbGenerator
                     InputStream = stream
                 }).Wait();
             }
+        }
+
+        public static void PurgeCache(string url, string key)
+        {
+            var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("Authorization", key);
+
+            var request = client.DeleteAsync(url);
+            request.Wait();
+            request.Result.EnsureSuccessStatusCode();
         }
     }
 }

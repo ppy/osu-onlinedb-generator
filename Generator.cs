@@ -74,6 +74,9 @@ namespace osu.Server.OnlineDbGenerator
         /// <param name="sqlite"></param>
         private void createSchema(SqliteConnection sqlite)
         {
+            sqlite.Execute("CREATE TABLE `schema_version` (`number` smallint unsigned NOT NULL)");
+            sqlite.Execute("INSERT INTO `schema_version` (`number`) VALUES (2)");
+
             sqlite.Execute(@"CREATE TABLE `osu_beatmapsets` (
                                   `beatmapset_id` mediumint unsigned NOT NULL,
                                   `submit_date` timestamp NOT NULL DEFAULT NULL,

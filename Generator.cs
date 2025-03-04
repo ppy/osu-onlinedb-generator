@@ -110,7 +110,9 @@ namespace osu.Server.OnlineDbGenerator
 
             var start = DateTime.Now;
 
-            var beatmapSetsReader = source.Query<BeatmapSetRow>("SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE approved > 0");
+            // only include "permanent" states – ranked, approved, loved.
+            // this cache may be preferred for initial metadata fetches in lazer so we don't want to include any beatmaps which are still shifting in state.
+            var beatmapSetsReader = source.Query<BeatmapSetRow>("SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE approved IN (1, 2, 4)");
 
             insertBeatmapSets(destination, beatmapSetsReader);
 

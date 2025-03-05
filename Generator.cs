@@ -28,6 +28,11 @@ namespace osu.Server.OnlineDbGenerator
         private static string sqliteBz2FilePath => $"{sqliteFilePath}.bz2";
 
         /// <summary>
+        /// Conditional to filter beatmaps and beatmapsets by.
+        /// </summary>
+        private const string where_conditions = "approved IN (1, 2, 4)";
+
+        /// <summary>
         /// Start generating the online.db file.
         /// </summary>
         public void Run()
@@ -112,7 +117,7 @@ namespace osu.Server.OnlineDbGenerator
 
             // only include "permanent" states – ranked, approved, loved.
             // this cache may be preferred for initial metadata fetches in lazer so we don't want to include any beatmaps which are still shifting in state.
-            var beatmapSetsReader = source.Query<BeatmapSetRow>("SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE approved IN (1, 2, 4)");
+            var beatmapSetsReader = source.Query<BeatmapSetRow>($"SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE {where_conditions}");
 
             insertBeatmapSets(destination, beatmapSetsReader);
 
@@ -138,7 +143,7 @@ namespace osu.Server.OnlineDbGenerator
 
             var start = DateTime.Now;
 
-            var beatmapsReader = source.Query<BeatmapRow>("SELECT beatmap_id, beatmapset_id, user_id, filename, checksum, approved, last_update FROM osu_beatmaps WHERE approved > 0");
+            var beatmapsReader = source.Query<BeatmapRow>($"SELECT beatmap_id, beatmapset_id, user_id, filename, checksum, approved, last_update FROM osu_beatmaps WHERE {where_conditions}");
 
             insertBeatmaps(destination, beatmapsReader);
 
@@ -198,13 +203,13 @@ namespace osu.Server.OnlineDbGenerator
         /// Count beatmap sets from MySQL or SQLite database.
         /// </summary>
         /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private int getBeatmapSetCount(IDbConnection conn) => conn.QuerySingle<int>("SELECT COUNT(beatmapset_id) FROM osu_beatmapsets WHERE approved > 0");
+        private int getBeatmapSetCount(IDbConnection conn) => conn.QuerySingle<int>($"SELECT COUNT(beatmapset_id) FROM osu_beatmapsets WHERE {where_conditions}");
 
         /// <summary>
         /// Count beatmaps from MySQL or SQLite database.
         /// </summary>
         /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private int getBeatmapCount(IDbConnection conn) => conn.QuerySingle<int>("SELECT COUNT(beatmap_id) FROM osu_beatmaps WHERE approved > 0");
+        private int getBeatmapCount(IDbConnection conn) => conn.QuerySingle<int>($"SELECT COUNT(beatmap_id) FROM osu_beatmaps WHERE {where_conditions}");
 
         /// <summary>
         /// Get a connection to the offline SQLite cache database.

@@ -1,6 +1,5 @@
 using System.Net.Http;
 using System;
-using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using Amazon;
@@ -49,6 +48,8 @@ namespace osu.Server.OnlineDbGenerator
                 copyBeatmaps(mysql, sqlite);
                 copyTags(mysql, sqlite);
                 copyBeatmapTags(mysql, sqlite);
+                copyUsernames(mysql, sqlite);
+                copyBeatmapOwners(mysql, sqlite);
 
                 Console.WriteLine("Compressing...");
 
@@ -126,6 +127,22 @@ namespace osu.Server.OnlineDbGenerator
                     `beatmap_id` int unsigned NOT NULL,
                     `tag_id` int unsigned NOT NULL,
                     PRIMARY KEY (`beatmap_id`, `tag_id`))
+                """);
+
+            sqlite.Execute(
+                """
+                CREATE TABLE `phpbb_users` (
+                    `user_id` int unsigned NOT NULL,
+                    `username` varchar(255) DEFAULT NULL,
+                    PRIMARY KEY (`user_id`))
+                """);
+
+            sqlite.Execute(
+                """
+                CREATE TABLE `beatmap_owners` (
+                    `beatmap_id` mediumint unsigned NOT NULL,
+                    `user_id` int unsigned NOT NULL,
+                    PRIMARY KEY (`beatmap_id`, `user_id`))
                 """);
         }
 
@@ -243,6 +260,60 @@ namespace osu.Server.OnlineDbGenerator
 
             if (destinationCount != sourceCount)
                 throw new Exception($"Expected {sourceCount} beatmap tags, but found {destinationCount} in sqlite! Aborting");
+        }
+
+        private void copyUsernames(IDbConnection source, IDbConnection destination)
+        {
+            int sourceCount = source.QuerySingle<int>("SELECT COUNT(`user_id`) FROM `phpbb_users`");
+            Console.WriteLine($"Copying {sourceCount} usernames...");
+
+            var start = DateTime.Now;
+            int processedItems = 0;
+
+            var sourceUsers = source.Query<UserRow>("SELECT `user_id`, `username` FROM `phpbb_users`");
+
+            foreach (var user in sourceUsers)
+            {
+                destination.Execute("INSERT INTO `phpbb_users` VALUES(@user_id, @username)", user);
+
+                if (++processedItems % 50 == 0)
+                    Console.WriteLine($"Copied {processedItems} usernames...");
+            }
+
+            var timespan = (DateTime.Now - start).TotalMilliseconds;
+            int destinationCount = destination.QuerySingle<int>("SELECT COUNT(`user_id`) FROM `phpbb_users`");
+
+            Console.WriteLine($"Copied usernames in {timespan}ms! (mysql:{sourceCount} sqlite:{destinationCount})");
+
+            if (destinationCount != sourceCount)
+                throw new Exception($"Expected {sourceCount} usernames, but found {destinationCount} in sqlite! Aborting");
+        }
+
+        private void copyBeatmapOwners(IDbConnection source, IDbConnection destination)
+        {
+            int sourceCount = source.QuerySingle<int>("SELECT COUNT(1) FROM `beatmap_owners`");
+            Console.WriteLine($"Copying {sourceCount} beatmap owners...");
+
+            var start = DateTime.Now;
+            int processedItems = 0;
+
+            var sourceBeatmapOwners = source.Query<BeatmapOwnerRow>("SELECT `beatmap_id`, `user_id` FROM `beatmap_owners`");
+
+            foreach (var owner in sourceBeatmapOwners)
+            {
+                destination.Execute("INSERT INTO `beatmap_owners` VALUES(@beatmap_id, @user_id)", owner);
+
+                if (++processedItems % 50 == 0)
+                    Console.WriteLine($"Copied {processedItems} beatmap owners...");
+            }
+
+            var timespan = (DateTime.Now - start).TotalMilliseconds;
+            int destinationCount = destination.QuerySingle<int>("SELECT COUNT(1) FROM `beatmap_owners`");
+
+            Console.WriteLine($"Copied beatmap owners in {timespan}ms! (mysql:{sourceCount} sqlite:{destinationCount})");
+
+            if (destinationCount != sourceCount)
+                throw new Exception($"Expected {sourceCount} beatmap owners, but found {destinationCount} in sqlite! Aborting");
         }
 
         /// <summary>

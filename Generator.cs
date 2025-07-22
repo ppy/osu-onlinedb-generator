@@ -47,6 +47,8 @@ namespace osu.Server.OnlineDbGenerator
 
                 copyBeatmapSets(mysql, sqlite);
                 copyBeatmaps(mysql, sqlite);
+                copyTags(mysql, sqlite);
+                copyBeatmapTags(mysql, sqlite);
 
                 Console.WriteLine("Compressing...");
 
@@ -80,29 +82,51 @@ namespace osu.Server.OnlineDbGenerator
         private void createSchema(SqliteConnection sqlite)
         {
             sqlite.Execute("CREATE TABLE `schema_version` (`number` smallint unsigned NOT NULL)");
-            sqlite.Execute("INSERT INTO `schema_version` (`number`) VALUES (2)");
+            sqlite.Execute("INSERT INTO `schema_version` (`number`) VALUES (3)");
 
-            sqlite.Execute(@"CREATE TABLE `osu_beatmapsets` (
-                                  `beatmapset_id` mediumint unsigned NOT NULL,
-                                  `submit_date` timestamp NOT NULL DEFAULT NULL,
-                                  `approved_date` timestamp NULL DEFAULT NULL,
-                                  `approved` timestamp NULL DEFAULT NULL,
-                                  PRIMARY KEY (`beatmapset_id`))");
+            sqlite.Execute(
+                """
+                CREATE TABLE `osu_beatmapsets` (
+                    `beatmapset_id` mediumint unsigned NOT NULL,
+                    `submit_date` timestamp NOT NULL DEFAULT NULL,
+                    `approved_date` timestamp NULL DEFAULT NULL,
+                    `approved` timestamp NULL DEFAULT NULL,
+                    PRIMARY KEY (`beatmapset_id`))
+                """);
 
-            sqlite.Execute(@"CREATE TABLE `osu_beatmaps` (
-                                  `beatmap_id` mediumint unsigned NOT NULL,
-                                  `beatmapset_id` mediumint unsigned DEFAULT NULL,
-                                  `user_id` int unsigned NOT NULL DEFAULT '0',
-                                  `filename` varchar(150) DEFAULT NULL,
-                                  `checksum` varchar(32) DEFAULT NULL,
-                                  `approved` tinyint NOT NULL DEFAULT '0',
-                                  `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                  PRIMARY KEY (`beatmap_id`))");
+            sqlite.Execute(
+                """
+                CREATE TABLE `osu_beatmaps` (
+                    `beatmap_id` mediumint unsigned NOT NULL,
+                    `beatmapset_id` mediumint unsigned DEFAULT NULL,
+                    `user_id` int unsigned NOT NULL DEFAULT '0',
+                    `filename` varchar(150) DEFAULT NULL,
+                    `checksum` varchar(32) DEFAULT NULL,
+                    `approved` tinyint NOT NULL DEFAULT '0',
+                    `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`beatmap_id`))
+                """);
 
             sqlite.Execute("CREATE INDEX `beatmapset_id` ON osu_beatmaps (`beatmapset_id`)");
             sqlite.Execute("CREATE INDEX `filename` ON osu_beatmaps (`filename`)");
             sqlite.Execute("CREATE INDEX `checksum` ON osu_beatmaps (`checksum`)");
             sqlite.Execute("CREATE INDEX `user_id` ON osu_beatmaps (`user_id`)");
+
+            sqlite.Execute(
+                """
+                CREATE TABLE `tags` (
+                    `id` bigint unsigned NOT NULL,
+                    `name` varchar(255) DEFAULT NULL,
+                    PRIMARY KEY (`id`))
+                """);
+
+            sqlite.Execute(
+                """
+                CREATE TABLE `beatmap_tags` (
+                    `beatmap_id` int unsigned NOT NULL,
+                    `tag_id` int unsigned NOT NULL,
+                    PRIMARY KEY (`beatmap_id`, `tag_id`))
+                """);
         }
 
         /// <summary>
@@ -165,6 +189,60 @@ namespace osu.Server.OnlineDbGenerator
 
             if (destinationCount != sourceCount)
                 throw new Exception($"Expected {sourceCount} beatmaps, but found {destinationCount} in sqlite! Aborting");
+        }
+
+        private void copyTags(IDbConnection source, IDbConnection destination)
+        {
+            int sourceCount = source.QuerySingle<int>("SELECT COUNT(`id`) FROM `tags`");
+            Console.WriteLine($"Copying {sourceCount} tags...");
+
+            var start = DateTime.Now;
+            int processedItems = 0;
+
+            var sourceTags = source.Query<TagRow>("SELECT `id`, `name` FROM `tags`");
+
+            foreach (var tag in sourceTags)
+            {
+                destination.Execute("INSERT INTO `tags` VALUES(@id, @name)", tag);
+
+                if (++processedItems % 50 == 0)
+                    Console.WriteLine($"Copied {processedItems} tags...");
+            }
+
+            var timespan = (DateTime.Now - start).TotalMilliseconds;
+            int destinationCount = destination.QuerySingle<int>("SELECT COUNT(`id`) FROM tags");
+
+            Console.WriteLine($"Copied tags in {timespan}ms! (mysql:{sourceCount} sqlite:{destinationCount})");
+
+            if (destinationCount != sourceCount)
+                throw new Exception($"Expected {sourceCount} tags, but found {destinationCount} in sqlite! Aborting");
+        }
+
+        private void copyBeatmapTags(IDbConnection source, IDbConnection destination)
+        {
+            int sourceCount = source.QuerySingle<int>("SELECT COUNT(DISTINCT `beatmap_id`, `tag_id`) FROM `beatmap_tags`");
+            Console.WriteLine($"Copying {sourceCount} beatmap tag pairs...");
+
+            var start = DateTime.Now;
+            int processedItems = 0;
+
+            var sourceBeatmapTags = source.Query<BeatmapTagRow>("SELECT DISTINCT `beatmap_id`, `tag_id` FROM `beatmap_tags`");
+
+            foreach (var beatmapTag in sourceBeatmapTags)
+            {
+                destination.Execute("INSERT INTO `beatmap_tags` VALUES(@beatmap_id, @tag_id)", beatmapTag);
+
+                if (++processedItems % 50 == 0)
+                    Console.WriteLine($"Copied {processedItems} tags...");
+            }
+
+            var timespan = (DateTime.Now - start).TotalMilliseconds;
+            int destinationCount = destination.QuerySingle<int>("SELECT COUNT(1) FROM `beatmap_tags`");
+
+            Console.WriteLine($"Copied beatmap tags in {timespan}ms! (mysql:{sourceCount} sqlite:{destinationCount})");
+
+            if (destinationCount != sourceCount)
+                throw new Exception($"Expected {sourceCount} beatmap tags, but found {destinationCount} in sqlite! Aborting");
         }
 
         /// <summary>

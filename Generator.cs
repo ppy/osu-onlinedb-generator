@@ -30,7 +30,7 @@ namespace osu.Server.OnlineDbGenerator
         /// <summary>
         /// Conditional to filter beatmaps and beatmapsets by.
         /// </summary>
-        private const string where_conditions = "approved IN (1, 2, 4)";
+        private const string beatmap_filter_conditions = "approved IN (1, 2, 4)";
 
         /// <summary>
         /// Start generating the online.db file.
@@ -110,27 +110,31 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         private void copyBeatmapSets(IDbConnection source, IDbConnection destination)
         {
-            int total = getBeatmapSetCount(source);
-            Console.WriteLine($"Copying {total} beatmap sets...");
+            int sourceCount = source.QuerySingle<int>($"SELECT COUNT(beatmapset_id) FROM osu_beatmapsets WHERE {beatmap_filter_conditions}");
+            Console.WriteLine($"Copying {sourceCount} beatmap sets...");
 
             var start = DateTime.Now;
+            int processedItems = 0;
 
             // only include "permanent" states – ranked, approved, loved.
             // this cache may be preferred for initial metadata fetches in lazer so we don't want to include any beatmaps which are still shifting in state.
-            var beatmapSetsReader = source.Query<BeatmapSetRow>($"SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE {where_conditions}");
+            var sourceBeatmapSets = source.Query<BeatmapSetRow>($"SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE {beatmap_filter_conditions}");
 
-            insertBeatmapSets(destination, beatmapSetsReader);
+            foreach (var beatmapset in sourceBeatmapSets)
+            {
+                destination.Execute("INSERT INTO osu_beatmapsets VALUES(@beatmapset_id, @submit_date, @approved_date, @approved)", beatmapset);
+
+                if (++processedItems % 50 == 0)
+                    Console.WriteLine($"Copied {processedItems} beatmap sets...");
+            }
 
             var timespan = (DateTime.Now - start).TotalMilliseconds;
+            int destinationCount = destination.QuerySingle<int>("SELECT COUNT(beatmapset_id) FROM osu_beatmapsets");
 
-            int totalSqlite = getBeatmapSetCount(destination);
+            Console.WriteLine($"Copied beatmap sets in {timespan}ms! (mysql:{sourceCount} sqlite:{destinationCount})");
 
-            Console.WriteLine($"Copied beatmap sets in {timespan}ms! (mysql:{total} sqlite:{totalSqlite})");
-
-            if (totalSqlite != total)
-            {
-                throw new Exception($"Expected {total} beatmap sets, but found {totalSqlite} in sqlite! Aborting");
-            }
+            if (destinationCount != sourceCount)
+                throw new Exception($"Expected {sourceCount} beatmap sets, but found {destinationCount} in sqlite! Aborting");
         }
 
         /// <summary>
@@ -138,78 +142,30 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         private void copyBeatmaps(IDbConnection source, IDbConnection destination)
         {
-            int total = getBeatmapCount(source);
-            Console.WriteLine($"Copying {total} beatmaps...");
+            int sourceCount = source.QuerySingle<int>($"SELECT COUNT(beatmap_id) FROM osu_beatmaps WHERE {beatmap_filter_conditions}");
+            Console.WriteLine($"Copying {sourceCount} beatmaps...");
 
             var start = DateTime.Now;
-
-            var beatmapsReader = source.Query<BeatmapRow>($"SELECT beatmap_id, beatmapset_id, user_id, filename, checksum, approved, last_update FROM osu_beatmaps WHERE {where_conditions}");
-
-            insertBeatmaps(destination, beatmapsReader);
-
-            var timespan = (DateTime.Now - start).TotalMilliseconds;
-
-            int totalSqlite = getBeatmapCount(destination);
-
-            Console.WriteLine($"Copied beatmaps in {timespan}ms! (mysql:{total} sqlite:{totalSqlite})");
-
-            if (totalSqlite != total)
-            {
-                throw new Exception($"Expected {total} beatmaps, but found {totalSqlite} in sqlite! Aborting");
-            }
-        }
-
-        /// <summary>
-        /// Insert beatmap sets into the SQLite database.
-        /// </summary>
-        /// <param name="conn">Connection to insert beatmaps into.</param>
-        /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
-        private void insertBeatmapSets(IDbConnection conn, IEnumerable<BeatmapSetRow> beatmapsets)
-        {
-            const string sql = "INSERT INTO osu_beatmapsets VALUES(@beatmapset_id, @submit_date, @approved_date, @approved)";
-
             int processedItems = 0;
 
-            foreach (var beatmapset in beatmapsets)
+            var sourceBeatmaps = source.Query<BeatmapRow>($"SELECT beatmap_id, beatmapset_id, user_id, filename, checksum, approved, last_update FROM osu_beatmaps WHERE {beatmap_filter_conditions}");
+
+            foreach (var beatmap in sourceBeatmaps)
             {
-                conn.Execute(sql, beatmapset);
-
-                if (++processedItems % 50 == 0)
-                    Console.WriteLine($"Copied {processedItems} beatmap sets...");
-            }
-        }
-
-        /// <summary>
-        /// Insert beatmaps into the SQLite database.
-        /// </summary>
-        /// <param name="conn">Connection to insert beatmaps into.</param>
-        /// <param name="beatmaps">DbDataReader object (obtained from SelectBeatmaps) to insert beatmaps from.</param>
-        private void insertBeatmaps(IDbConnection conn, IEnumerable<BeatmapRow> beatmaps)
-        {
-            const string sql = "INSERT INTO osu_beatmaps VALUES(@beatmap_id, @beatmapset_id, @user_id, @filename, @checksum, @approved, @last_update)";
-
-            int processedItems = 0;
-
-            foreach (var beatmap in beatmaps)
-            {
-                conn.Execute(sql, beatmap);
+                destination.Execute("INSERT INTO osu_beatmaps VALUES(@beatmap_id, @beatmapset_id, @user_id, @filename, @checksum, @approved, @last_update)", beatmap);
 
                 if (++processedItems % 50 == 0)
                     Console.WriteLine($"Copied {processedItems} beatmaps...");
             }
+
+            var timespan = (DateTime.Now - start).TotalMilliseconds;
+            int destinationCount = destination.QuerySingle<int>($"SELECT COUNT(beatmap_id) FROM osu_beatmaps");
+
+            Console.WriteLine($"Copied beatmaps in {timespan}ms! (mysql:{sourceCount} sqlite:{destinationCount})");
+
+            if (destinationCount != sourceCount)
+                throw new Exception($"Expected {sourceCount} beatmaps, but found {destinationCount} in sqlite! Aborting");
         }
-
-        /// <summary>
-        /// Count beatmap sets from MySQL or SQLite database.
-        /// </summary>
-        /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private int getBeatmapSetCount(IDbConnection conn) => conn.QuerySingle<int>($"SELECT COUNT(beatmapset_id) FROM osu_beatmapsets WHERE {where_conditions}");
-
-        /// <summary>
-        /// Count beatmaps from MySQL or SQLite database.
-        /// </summary>
-        /// <param name="conn">Connection to fetch beatmaps from.</param>
-        private int getBeatmapCount(IDbConnection conn) => conn.QuerySingle<int>($"SELECT COUNT(beatmap_id) FROM osu_beatmaps WHERE {where_conditions}");
 
         /// <summary>
         /// Get a connection to the offline SQLite cache database.

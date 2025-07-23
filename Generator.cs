@@ -131,7 +131,7 @@ namespace osu.Server.OnlineDbGenerator
 
             sqlite.Execute(
                 """
-                CREATE TABLE `phpbb_users` (
+                CREATE TABLE `users` (
                     `user_id` int unsigned NOT NULL,
                     `username` varchar(255) DEFAULT NULL,
                     PRIMARY KEY (`user_id`))
@@ -290,14 +290,14 @@ namespace osu.Server.OnlineDbGenerator
 
             foreach (var user in sourceUsers)
             {
-                destination.Execute("INSERT INTO `phpbb_users` VALUES(@user_id, @username)", user);
+                destination.Execute("INSERT INTO `users` VALUES(@user_id, @username)", user);
 
                 if (++processedItems % 50 == 0)
                     Console.WriteLine($"Copied {processedItems} usernames...");
             }
 
             var timespan = (DateTime.Now - start).TotalMilliseconds;
-            int destinationCount = destination.QuerySingle<int>("SELECT COUNT(`user_id`) FROM `phpbb_users`");
+            int destinationCount = destination.QuerySingle<int>("SELECT COUNT(`user_id`) FROM `users`");
 
             Console.WriteLine($"Copied usernames in {timespan}ms! (mysql:{sourceCount} sqlite:{destinationCount})");
 

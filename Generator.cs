@@ -31,6 +31,8 @@ namespace osu.Server.OnlineDbGenerator
         /// </summary>
         private const string beatmap_filter_conditions = "approved IN (1, 2, 4)";
 
+        private const string beatmap_id_in_filter = $" WHERE `beatmap_id` IN (SELECT `beatmap_id` FROM `osu_beatmaps` WHERE {beatmap_filter_conditions})";
+
         /// <summary>
         /// Start generating the online.db file.
         /// </summary>
@@ -159,7 +161,8 @@ namespace osu.Server.OnlineDbGenerator
 
             // only include "permanent" states – ranked, approved, loved.
             // this cache may be preferred for initial metadata fetches in lazer so we don't want to include any beatmaps which are still shifting in state.
-            var sourceBeatmapSets = source.Query<BeatmapSetRow>($"SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE {beatmap_filter_conditions}", commandTimeout: 600_000);
+            var sourceBeatmapSets = source.Query<BeatmapSetRow>($"SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE {beatmap_filter_conditions}",
+                commandTimeout: 600_000);
 
             foreach (var beatmapset in sourceBeatmapSets)
             {
@@ -189,7 +192,8 @@ namespace osu.Server.OnlineDbGenerator
             var start = DateTime.Now;
             int processedItems = 0;
 
-            var sourceBeatmaps = source.Query<BeatmapRow>($"SELECT beatmap_id, beatmapset_id, user_id, filename, checksum, approved, last_update FROM osu_beatmaps WHERE {beatmap_filter_conditions}", commandTimeout: 600_000);
+            var sourceBeatmaps = source.Query<BeatmapRow>($"SELECT beatmap_id, beatmapset_id, user_id, filename, checksum, approved, last_update FROM osu_beatmaps WHERE {beatmap_filter_conditions}",
+                commandTimeout: 600_000);
 
             foreach (var beatmap in sourceBeatmaps)
             {
@@ -239,9 +243,9 @@ namespace osu.Server.OnlineDbGenerator
         {
             int sourceCount = source.QuerySingle<int>(
                 $"""
-                SELECT COUNT(DISTINCT `beatmap_id`, `tag_id`) FROM `beatmap_tags`
-                WHERE `beatmap_id` IN (SELECT `beatmap_id` FROM `osu_beatmaps` WHERE {beatmap_filter_conditions})
-                """, commandTimeout: 600_000);
+                 SELECT COUNT(DISTINCT `beatmap_id`, `tag_id`) FROM `beatmap_tags`
+                 {beatmap_id_in_filter}
+                 """, commandTimeout: 600_000);
             Console.WriteLine($"Copying {sourceCount} beatmap tag pairs...");
 
             var start = DateTime.Now;
@@ -249,9 +253,9 @@ namespace osu.Server.OnlineDbGenerator
 
             var sourceBeatmapTags = source.Query<BeatmapTagRow>(
                 $"""
-                SELECT DISTINCT `beatmap_id`, `tag_id` FROM `beatmap_tags`
-                WHERE `beatmap_id` IN (SELECT `beatmap_id` FROM `osu_beatmaps` WHERE {beatmap_filter_conditions})
-                """, commandTimeout: 600_000);
+                 SELECT DISTINCT `beatmap_id`, `tag_id` FROM `beatmap_tags`
+                 {beatmap_id_in_filter}
+                 """, commandTimeout: 600_000);
 
             foreach (var beatmapTag in sourceBeatmapTags)
             {
@@ -273,20 +277,20 @@ namespace osu.Server.OnlineDbGenerator
         private void copyUsernames(IDbConnection source, IDbConnection destination)
         {
             int sourceCount = source.QuerySingle<int>(
-                """
-                SELECT COUNT(`user_id`) FROM `phpbb_users`
-                WHERE `user_id` IN (SELECT `user_id` FROM `osu_beatmaps` UNION SELECT `user_id` FROM `beatmap_owners`)
-                """, commandTimeout: 600_000);
+                $"""
+                 SELECT COUNT(`user_id`) FROM `phpbb_users`
+                 WHERE `user_id` IN (SELECT `user_id` FROM `osu_beatmaps` WHERE {beatmap_filter_conditions} UNION SELECT `user_id` FROM `beatmap_owners` {beatmap_id_in_filter})
+                 """, commandTimeout: 600_000);
             Console.WriteLine($"Copying {sourceCount} usernames...");
 
             var start = DateTime.Now;
             int processedItems = 0;
 
             var sourceUsers = source.Query<UserRow>(
-                """
-                SELECT `user_id`, `username` FROM `phpbb_users`
-                WHERE `user_id` IN (SELECT `user_id` FROM `osu_beatmaps` UNION SELECT `user_id` FROM `beatmap_owners`)
-                """, commandTimeout: 600_000);
+                $"""
+                 SELECT `user_id`, `username` FROM `phpbb_users`
+                 WHERE `user_id` IN (SELECT `user_id` FROM `osu_beatmaps` WHERE {beatmap_filter_conditions} UNION SELECT `user_id` FROM `beatmap_owners` {beatmap_id_in_filter})
+                 """, commandTimeout: 600_000);
 
             foreach (var user in sourceUsers)
             {
@@ -307,13 +311,13 @@ namespace osu.Server.OnlineDbGenerator
 
         private void copyBeatmapOwners(IDbConnection source, IDbConnection destination)
         {
-            int sourceCount = source.QuerySingle<int>("SELECT COUNT(1) FROM `beatmap_owners`", commandTimeout: 600_000);
+            int sourceCount = source.QuerySingle<int>($"SELECT COUNT(1) FROM `beatmap_owners` {beatmap_id_in_filter}", commandTimeout: 600_000);
             Console.WriteLine($"Copying {sourceCount} beatmap owners...");
 
             var start = DateTime.Now;
             int processedItems = 0;
 
-            var sourceBeatmapOwners = source.Query<BeatmapOwnerRow>("SELECT `beatmap_id`, `user_id` FROM `beatmap_owners`", commandTimeout: 600_000);
+            var sourceBeatmapOwners = source.Query<BeatmapOwnerRow>($"SELECT `beatmap_id`, `user_id` FROM `beatmap_owners` {beatmap_id_in_filter}", commandTimeout: 600_000);
 
             foreach (var owner in sourceBeatmapOwners)
             {

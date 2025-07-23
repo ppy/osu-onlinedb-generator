@@ -165,7 +165,7 @@ namespace osu.Server.OnlineDbGenerator
             {
                 destination.Execute("INSERT INTO osu_beatmapsets VALUES(@beatmapset_id, @submit_date, @approved_date, @approved)", beatmapset);
 
-                if (++processedItems % 50 == 0)
+                if (++processedItems % 1000 == 0)
                     Console.WriteLine($"Copied {processedItems} beatmap sets...");
             }
 
@@ -195,7 +195,7 @@ namespace osu.Server.OnlineDbGenerator
             {
                 destination.Execute("INSERT INTO osu_beatmaps VALUES(@beatmap_id, @beatmapset_id, @user_id, @filename, @checksum, @approved, @last_update)", beatmap);
 
-                if (++processedItems % 50 == 0)
+                if (++processedItems % 1000 == 0)
                     Console.WriteLine($"Copied {processedItems} beatmaps...");
             }
 
@@ -222,7 +222,7 @@ namespace osu.Server.OnlineDbGenerator
             {
                 destination.Execute("INSERT INTO `tags` VALUES(@id, @name)", tag);
 
-                if (++processedItems % 50 == 0)
+                if (++processedItems % 1000 == 0)
                     Console.WriteLine($"Copied {processedItems} tags...");
             }
 
@@ -257,7 +257,7 @@ namespace osu.Server.OnlineDbGenerator
             {
                 destination.Execute("INSERT INTO `beatmap_tags` VALUES(@beatmap_id, @tag_id)", beatmapTag);
 
-                if (++processedItems % 50 == 0)
+                if (++processedItems % 1000 == 0)
                     Console.WriteLine($"Copied {processedItems} tags...");
             }
 
@@ -292,7 +292,7 @@ namespace osu.Server.OnlineDbGenerator
             {
                 destination.Execute("INSERT INTO `users` VALUES(@user_id, @username)", user);
 
-                if (++processedItems % 50 == 0)
+                if (++processedItems % 1000 == 0)
                     Console.WriteLine($"Copied {processedItems} usernames...");
             }
 
@@ -319,7 +319,7 @@ namespace osu.Server.OnlineDbGenerator
             {
                 destination.Execute("INSERT INTO `beatmap_owners` VALUES(@beatmap_id, @user_id)", owner);
 
-                if (++processedItems % 50 == 0)
+                if (++processedItems % 1000 == 0)
                     Console.WriteLine($"Copied {processedItems} beatmap owners...");
             }
 

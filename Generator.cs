@@ -237,13 +237,21 @@ namespace osu.Server.OnlineDbGenerator
 
         private void copyBeatmapTags(IDbConnection source, IDbConnection destination)
         {
-            int sourceCount = source.QuerySingle<int>("SELECT COUNT(DISTINCT `beatmap_id`, `tag_id`) FROM `beatmap_tags`");
+            int sourceCount = source.QuerySingle<int>(
+                $"""
+                SELECT COUNT(DISTINCT `beatmap_id`, `tag_id`) FROM `beatmap_tags`
+                WHERE `beatmap_id` IN (SELECT `beatmap_id` FROM `osu_beatmaps` WHERE {beatmap_filter_conditions})
+                """);
             Console.WriteLine($"Copying {sourceCount} beatmap tag pairs...");
 
             var start = DateTime.Now;
             int processedItems = 0;
 
-            var sourceBeatmapTags = source.Query<BeatmapTagRow>("SELECT DISTINCT `beatmap_id`, `tag_id` FROM `beatmap_tags`");
+            var sourceBeatmapTags = source.Query<BeatmapTagRow>(
+                $"""
+                SELECT DISTINCT `beatmap_id`, `tag_id` FROM `beatmap_tags`
+                WHERE `beatmap_id` IN (SELECT `beatmap_id` FROM `osu_beatmaps` WHERE {beatmap_filter_conditions})
+                """);
 
             foreach (var beatmapTag in sourceBeatmapTags)
             {
@@ -264,13 +272,21 @@ namespace osu.Server.OnlineDbGenerator
 
         private void copyUsernames(IDbConnection source, IDbConnection destination)
         {
-            int sourceCount = source.QuerySingle<int>("SELECT COUNT(`user_id`) FROM `phpbb_users`");
+            int sourceCount = source.QuerySingle<int>(
+                """
+                SELECT COUNT(`user_id`) FROM `phpbb_users`
+                WHERE `user_id` IN (SELECT `user_id` FROM `osu_beatmaps` UNION SELECT `user_id` FROM `beatmap_owners`)
+                """);
             Console.WriteLine($"Copying {sourceCount} usernames...");
 
             var start = DateTime.Now;
             int processedItems = 0;
 
-            var sourceUsers = source.Query<UserRow>("SELECT `user_id`, `username` FROM `phpbb_users`");
+            var sourceUsers = source.Query<UserRow>(
+                """
+                SELECT `user_id`, `username` FROM `phpbb_users`
+                WHERE `user_id` IN (SELECT `user_id` FROM `osu_beatmaps` UNION SELECT `user_id` FROM `beatmap_owners`)
+                """);
 
             foreach (var user in sourceUsers)
             {

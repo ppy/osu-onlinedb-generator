@@ -242,9 +242,15 @@ namespace osu.Server.OnlineDbGenerator
         private void copyBeatmapTags(IDbConnection source, IDbConnection destination)
         {
             int sourceCount = source.QuerySingle<int>(
+                // subquery is required to get the count of rows post-grouping-and-filtering-on-vote-count
                 $"""
-                 SELECT COUNT(DISTINCT `beatmap_id`, `tag_id`) FROM `beatmap_tags`
-                 {beatmap_id_in_filter}
+                 SELECT COUNT(*) FROM
+                 (
+                    SELECT 1 FROM `beatmap_tags`
+                    {beatmap_id_in_filter}
+                    GROUP BY `beatmap_id`, `tag_id`
+                    HAVING COUNT(1) >= 5
+                 ) AS `tags`;
                  """, commandTimeout: 600_000);
             Console.WriteLine($"Copying {sourceCount} beatmap tag pairs...");
 
@@ -253,8 +259,10 @@ namespace osu.Server.OnlineDbGenerator
 
             var sourceBeatmapTags = source.Query<BeatmapTagRow>(
                 $"""
-                 SELECT DISTINCT `beatmap_id`, `tag_id` FROM `beatmap_tags`
+                 SELECT `beatmap_id`, `tag_id` FROM `beatmap_tags`
                  {beatmap_id_in_filter}
+                 GROUP BY `beatmap_id`, `tag_id`
+                 HAVING COUNT(1) >= 5
                  """, commandTimeout: 600_000);
 
             foreach (var beatmapTag in sourceBeatmapTags)

@@ -85,15 +85,18 @@ namespace osu.Server.OnlineDbGenerator
         private void createSchema(SqliteConnection sqlite)
         {
             sqlite.Execute("CREATE TABLE `schema_version` (`number` smallint unsigned NOT NULL)");
-            sqlite.Execute("INSERT INTO `schema_version` (`number`) VALUES (3)");
+            sqlite.Execute("INSERT INTO `schema_version` (`number`) VALUES (4)");
 
             sqlite.Execute(
                 """
                 CREATE TABLE `osu_beatmapsets` (
                     `beatmapset_id` mediumint unsigned NOT NULL,
+                    `user_id` mediumint unsigned NOT NULL,
                     `submit_date` timestamp NOT NULL DEFAULT NULL,
                     `approved_date` timestamp NULL DEFAULT NULL,
                     `approved` timestamp NULL DEFAULT NULL,
+                    `nsfw` tinyint(1) NOT NULL DEFAULT 0,
+                    `anime_cover` tinyint(1) NOT NULL DEFAULT 0,
                     PRIMARY KEY (`beatmapset_id`))
                 """);
 
@@ -161,12 +164,12 @@ namespace osu.Server.OnlineDbGenerator
 
             // only include "permanent" states – ranked, approved, loved.
             // this cache may be preferred for initial metadata fetches in lazer so we don't want to include any beatmaps which are still shifting in state.
-            var sourceBeatmapSets = source.Query<BeatmapSetRow>($"SELECT beatmapset_id, approved, approved_date, submit_date FROM osu_beatmapsets WHERE {beatmap_filter_conditions}",
+            var sourceBeatmapSets = source.Query<BeatmapSetRow>($"SELECT beatmapset_id, user_id, approved, approved_date, submit_date, nsfw, anime_cover FROM osu_beatmapsets WHERE {beatmap_filter_conditions}",
                 commandTimeout: 600_000);
 
             foreach (var beatmapset in sourceBeatmapSets)
             {
-                destination.Execute("INSERT INTO osu_beatmapsets VALUES(@beatmapset_id, @submit_date, @approved_date, @approved)", beatmapset);
+                destination.Execute("INSERT INTO osu_beatmapsets VALUES(@beatmapset_id, @user_id, @submit_date, @approved_date, @approved, @nsfw, @anime_cover)", beatmapset);
 
                 if (++processedItems % 1000 == 0)
                     Console.WriteLine($"Copied {processedItems} beatmap sets...");

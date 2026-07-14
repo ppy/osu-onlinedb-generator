@@ -10,8 +10,11 @@ namespace osu.Server.OnlineDbGenerator
     public class BeatmapSetRow
     {
         public int beatmapset_id { get; set; }
+        public int user_id { get; set; }
         public int approved { get; set; }
         public DateTimeOffset approved_date { get; set; }
         public DateTimeOffset submit_date { get; set; }
+        public bool nsfw { get; set; }
+        public bool anime_cover { get; set; }
     }
 }

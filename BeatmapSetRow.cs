@@ -16,5 +16,6 @@ namespace osu.Server.OnlineDbGenerator
         public DateTimeOffset submit_date { get; set; }
         public bool nsfw { get; set; }
         public bool anime_cover { get; set; }
+        public short offset { get; set; }
     }
 }

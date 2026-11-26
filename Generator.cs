@@ -57,7 +57,7 @@ namespace osu.Server.OnlineDbGenerator
 
                 using (var inStream = File.OpenRead(sqliteFilePath))
                 using (var outStream = File.OpenWrite(sqliteBz2FilePath))
-                using (var bz2 = new BZip2Stream(outStream, CompressionMode.Compress, false))
+                using (var bz2 = BZip2Stream.Create(outStream, CompressionMode.Compress, false))
                     inStream.CopyTo(bz2);
 
                 if (Environment.GetEnvironmentVariable("S3_KEY") != null)
